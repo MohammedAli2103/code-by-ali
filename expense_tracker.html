@@ -1,0 +1,218 @@
+
+<h2><center>Personal expense tracker — add, view, and analyze your expenses by category</center></h2>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans)}
+.wrap{padding:1rem 0;max-width:700px;margin:auto}
+.top-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem}
+.top-bar h1{font-size:20px;font-weight:500;color:var(--color-text-primary)}
+.metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:1.5rem}
+.metric{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:1rem}
+.metric .lbl{font-size:12px;color:var(--color-text-secondary);margin-bottom:4px}
+.metric .val{font-size:22px;font-weight:500;color:var(--color-text-primary)}
+.metric .val.neg{color:var(--color-text-danger)}
+.card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1rem 1.25rem;margin-bottom:1rem}
+.form-grid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;margin-bottom:10px}
+.form-row{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end}
+input,select{width:100%}
+.add-btn{background:var(--color-text-primary);color:var(--color-background-primary);border:none;border-radius:var(--border-radius-md);padding:0 20px;height:36px;font-size:14px;cursor:pointer;white-space:nowrap}
+.add-btn:hover{opacity:.85}
+.section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.section-head h2{font-size:15px;font-weight:500;color:var(--color-text-primary)}
+.filter-row{display:flex;gap:8px;flex-wrap:wrap}
+.filter-btn{background:transparent;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:4px 12px;font-size:12px;cursor:pointer;color:var(--color-text-secondary)}
+.filter-btn.active{background:var(--color-text-primary);color:var(--color-background-primary);border-color:transparent}
+.expense-list{display:flex;flex-direction:column;gap:6px}
+.exp-row{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--color-background-secondary);border-radius:var(--border-radius-md)}
+.exp-icon{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.exp-info{flex:1;min-width:0}
+.exp-name{font-size:14px;font-weight:500;color:var(--color-text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.exp-meta{font-size:12px;color:var(--color-text-secondary)}
+.exp-amount{font-size:15px;font-weight:500;color:var(--color-text-primary);white-space:nowrap}
+.del-btn{background:transparent;border:none;cursor:pointer;color:var(--color-text-tertiary);font-size:16px;padding:0 4px;line-height:1}
+.del-btn:hover{color:var(--color-text-danger)}
+.empty{text-align:center;padding:2rem;color:var(--color-text-tertiary);font-size:14px}
+.chart-wrap{position:relative;width:100%;height:180px;margin-top:8px}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px}
+</style>
+
+<div class="wrap">
+  <div class="top-bar">
+    <h1>My Expenses</h1>
+    <span id="month-label" style="font-size:13px;color:var(--color-text-secondary)"></span>
+  </div>
+
+  <div class="metrics">
+    <div class="metric"><div class="lbl">Total spent</div><div class="val" id="m-total">₹0</div></div>
+    <div class="metric"><div class="lbl">This month</div><div class="val" id="m-month">₹0</div></div>
+    <div class="metric"><div class="lbl">Transactions</div><div class="val" id="m-count">0</div></div>
+  </div>
+
+  <div class="card">
+    <div class="section-head"><h2>Add expense</h2></div>
+    <div class="form-grid">
+      <input type="text" id="f-desc" placeholder="Description" />
+      <input type="number" id="f-amt" placeholder="Amount (₹)" min="0" step="1" />
+      <input type="date" id="f-date" />
+    </div>
+    <div class="form-row">
+      <select id="f-cat">
+        <option value="Food">🍽 Food</option>
+        <option value="Transport">🚌 Transport</option>
+        <option value="Shopping">🛍 Shopping</option>
+        <option value="Health">💊 Health</option>
+        <option value="Entertainment">🎬 Entertainment</option>
+        <option value="Bills">💡 Bills</option>
+        <option value="Other">📦 Other</option>
+      </select>
+      <select id="f-mode">
+        <option value="UPI">UPI</option>
+        <option value="Cash">Cash</option>
+        <option value="Card">Card</option>
+        <option value="Net Banking">Net Banking</option>
+      </select>
+      <button class="add-btn" id="add-btn">+ Add</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-head">
+      <h2>Spending by category</h2>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="cat-chart" role="img" aria-label="Bar chart showing spending by category">Category spending chart</canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-head">
+      <h2>Transactions</h2>
+      <div class="filter-row" id="filter-row"></div>
+    </div>
+    <div class="expense-list" id="exp-list"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const CAT_COLORS = {Food:'#E24B4A',Transport:'#378ADD',Shopping:'#D85A30',Health:'#1D9E75',Entertainment:'#7F77DD',Bills:'#BA7517',Other:'#888780'};
+const CAT_ICONS = {Food:'🍽',Transport:'🚌',Shopping:'🛍',Health:'💊',Entertainment:'🎬',Bills:'💡',Other:'📦'};
+
+let expenses = [];
+let activeFilter = 'All';
+let catChart = null;
+
+async function load() {
+  try {
+    const r = await window.storage.get('expenses_v1');
+    if (r) expenses = JSON.parse(r.value);
+  } catch(e) { expenses = []; }
+  render();
+}
+
+async function save() {
+  try { await window.storage.set('expenses_v1', JSON.stringify(expenses)); } catch(e){}
+}
+
+function fmt(n) { return '₹' + Number(n).toLocaleString('en-IN'); }
+
+function render() {
+  const now = new Date();
+  const thisMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  document.getElementById('month-label').textContent = now.toLocaleString('default',{month:'long',year:'numeric'});
+
+  const total = expenses.reduce((s,e)=>s+e.amount,0);
+  const monthExp = expenses.filter(e=>e.date.startsWith(thisMonth)).reduce((s,e)=>s+e.amount,0);
+  document.getElementById('m-total').textContent = fmt(total);
+  document.getElementById('m-month').textContent = fmt(monthExp);
+  document.getElementById('m-count').textContent = expenses.length;
+
+  // filters
+  const cats = ['All', ...Object.keys(CAT_COLORS)];
+  const fr = document.getElementById('filter-row');
+  fr.innerHTML = '';
+  cats.forEach(c => {
+    const b = document.createElement('button');
+    b.className = 'filter-btn' + (activeFilter===c?' active':'');
+    b.textContent = c;
+    b.onclick = () => { activeFilter=c; render(); };
+    fr.appendChild(b);
+  });
+
+  // list
+  const filtered = activeFilter==='All' ? expenses : expenses.filter(e=>e.cat===activeFilter);
+  const sorted = [...filtered].sort((a,b)=>b.date.localeCompare(a.date));
+  const list = document.getElementById('exp-list');
+  if (sorted.length===0) {
+    list.innerHTML = '<div class="empty">No expenses yet. Add one above!</div>';
+  } else {
+    list.innerHTML = sorted.map(e=>`
+      <div class="exp-row">
+        <div class="exp-icon" style="background:${CAT_COLORS[e.cat]}22">${CAT_ICONS[e.cat]||'📦'}</div>
+        <div class="exp-info">
+          <div class="exp-name">${e.desc||e.cat}</div>
+          <div class="exp-meta">${e.date} &middot; ${e.mode}</div>
+        </div>
+        <div class="exp-amount">${fmt(e.amount)}</div>
+        <button class="del-btn" onclick="del('${e.id}')">&#10005;</button>
+      </div>`).join('');
+  }
+
+  // chart
+  const catTotals = {};
+  expenses.forEach(e=>{ catTotals[e.cat]=(catTotals[e.cat]||0)+e.amount; });
+  const cats2 = Object.keys(catTotals).sort((a,b)=>catTotals[b]-catTotals[a]);
+  const isDark = matchMedia('(prefers-color-scheme: dark)').matches;
+  const textColor = isDark ? '#ccc' : '#555';
+  if (catChart) catChart.destroy();
+  if (cats2.length > 0) {
+    catChart = new Chart(document.getElementById('cat-chart'), {
+      type: 'bar',
+      data: {
+        labels: cats2,
+        datasets: [{
+          data: cats2.map(c=>catTotals[c]),
+          backgroundColor: cats2.map(c=>CAT_COLORS[c]+'cc'),
+          borderColor: cats2.map(c=>CAT_COLORS[c]),
+          borderWidth: 1,
+          borderRadius: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: textColor, font:{size:11} }, grid: { display: false } },
+          y: { ticks: { color: textColor, font:{size:11}, callback: v=>'₹'+v.toLocaleString('en-IN') }, grid: { color: isDark?'rgba(255,255,255,.06)':'rgba(0,0,0,.05)' } }
+        }
+      }
+    });
+  }
+}
+
+window.del = async function(id) {
+  expenses = expenses.filter(e=>e.id!==id);
+  await save(); render();
+};
+
+document.getElementById('add-btn').onclick = async function() {
+  const desc = document.getElementById('f-desc').value.trim();
+  const amt = parseFloat(document.getElementById('f-amt').value);
+  const date = document.getElementById('f-date').value;
+  const cat = document.getElementById('f-cat').value;
+  const mode = document.getElementById('f-mode').value;
+  if (!amt || amt<=0 || !date) { alert('Please enter a valid amount and date.'); return; }
+  expenses.push({ id: Date.now().toString(), desc: desc||cat, amount: amt, date, cat, mode });
+  document.getElementById('f-desc').value='';
+  document.getElementById('f-amt').value='';
+  await save(); render();
+};
+
+// default date to today
+const today = new Date();
+document.getElementById('f-date').value = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+
+load();
+
+</script>
